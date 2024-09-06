@@ -1,0 +1,164 @@
+// GET route to fetch all items from the database
+app.get('/items', async (req, res) => {
+  try {
+    // Fetch all items from the database
+    const items = await Item.findAll();
+    // Respond with the fetched items in JSON format
+    res.json(items);
+  } catch (error) {
+    // Log the error and respond with a 500 status code
+    console.error('Error fetching items:', error);
+    res.status(500).json({ error: 'An error occurred while fetching items.' });
+  }
+});
+
+// PUT route to update an item by ID
+app.put('/items/:id', async (req, res) => {
+  try {
+    const id = req.params.id; // Get the item ID from the URL parameter
+    const updatedData = req.body; // Get the full updated data from the request body
+
+    // Find the item by ID and update it with the new data
+    const [updated] = await Item.update(updatedData, { where: { id } });
+
+    if (updated) {
+      // If the update was successful, fetch the updated item
+      const updatedItem = await Item.findOne({ where: { id } });
+      res.json(updatedItem); // Respond with the updated item
+    } else {
+      // If the item was not found, respond with a 404 error
+      res.status(404).json({ error: 'Item not found' });
+    }
+  } catch (error) {
+    // Log the error and respond with a 500 status code
+    console.error('Error updating item:', error);
+    res.status(500).json({ error: 'An error occurred while updating the item.' });
+  }
+});
+
+app.post("/items", async (req, res) => {
+  try {
+    // Determine if input is an array or a single object and validate accordingly
+    let value;
+    if (Array.isArray(req.body)) {
+      const { error, value: validatedValue } = itemsArraySchema.validate(req.body);
+      if (error) {
+        return res.status(400).json({ error: error.details[0].message });
+      }
+      value = validatedValue;
+    } else {
+      const { error, value: validatedValue } = itemSchema.validate(req.body);
+      if (error) {
+        return res.status(400).json({ error: error.details[0].message });
+      }
+      value = validatedValue;
+    }
+
+    // Handle creation in the database
+    if (Array.isArray(value)) {
+      const items = await Item.bulkCreate(value);
+      res.status(201).json(items);
+    } else {
+      const item = await Item.create(value);
+      res.status(201).json(item);
+    }
+  } catch (error) {
+    console.error("Error creating item(s):", error);
+    res.status(500).json({ error: "An error occurred while creating the item(s)." });
+  }
+});
+
+const express = require('express');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
+const User = require('./user'); // Import your User model
+const router = express.Router();
+const { JWT_SECRET } = process.env;
+
+// User registration (signup)
+router.post('/register', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    // Hash the password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Create new user
+    const user = await User.create({ username, password: hashedPassword });
+
+    res.status(201).json({ message: 'User registered successfully', user });
+  } catch (error) {
+    console.error('Error registering user:', error);
+    res.status(500).json({ error: 'An error occurred during registration.' });
+  }
+});
+
+// User login (signin)
+router.post('/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    // Find user by username
+    const user = await User.findOne({ where: { username } });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Compare password with hashed password
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // Generate JWT token
+    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '1h' });
+
+    res.json({ message: 'Login successful', token });
+  } catch (error) {
+    console.error('Error logging in:', error);
+    res.status(500).json({ error: 'An error occurred during login.' });
+  }
+});
+
+module.exports = router;
+
+postmodel
+const { DataTypes } = require('sequelize');
+const sequelize = require('../config/database');
+const User = require('./user');
+
+const Post = sequelize.define('Post', {
+  title: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+  content: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+  userId: {
+    type: DataTypes.INTEGER,
+    references: {
+      model: User,
+      key: 'id',
+    },
+  },
+});
+
+Post.belongsTo(User, { foreignKey: 'userId' });
+User.hasMany(Post, { foreignKey: 'userId' });
+
+module.exports = Post;
+const Post = require('../models/post');
+
+exports.createPost = async (req, res, next) => {
+  try {
+    const { title, content, userId } = req.body;
+    const post = await Post.create({ title, content, userId });
+    res.status(201).json(post);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Add more controller functions as needed.
